@@ -9,14 +9,14 @@ declare
   amount numeric;
 begin
   select * into item from public.finance_items where id = p_item_id for update;
-  if not found then raise exception 'Debt unavailable. Refresh your household connection.'; end if;
-  if item.type <> 'debt' then raise exception 'Only debts can be marked paid.'; end if;
+  if not found then raise exception 'Record unavailable. Refresh your household connection.'; end if;
+  if item.type not in ('bill','debt') then raise exception 'Only bills and debts can be marked paid.'; end if;
   if exists (select 1 from jsonb_array_elements(item.payment_history) p where p->>'month' = billing_month) then
     return item;
   end if;
-  amount := least(round(item.balance,2), round(item.payment,2));
-  if amount <= 0 then raise exception 'The debt must have a positive balance and minimum payment.'; end if;
-  update public.finance_items set balance = balance - amount,
+  amount := case when item.type='bill' then round(item.payment,2) else least(round(item.balance,2), round(item.payment,2)) end;
+  if amount <= 0 then raise exception 'A positive payment is required (and a positive balance for debts).'; end if;
+  update public.finance_items set balance = case when item.type='debt' then balance - amount else balance end,
     payment_history = payment_history || jsonb_build_array(jsonb_build_object('month',billing_month,'date',payment_date,'amount',amount,'recordedAt',current_timestamp)),
     updated_at = clock_timestamp()
   where id = p_item_id returning * into item;

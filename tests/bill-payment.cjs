@@ -1,0 +1,9 @@
+const vm=require('node:vm'),fs=require('node:fs'),assert=require('node:assert/strict');
+const el=()=>({elements:new Proxy({},{get:()=>({value:'',addEventListener(){}})}),setAttribute(){},addEventListener(){}});
+let nodes={};const ctx=vm.createContext({console,Intl,Date,Map,Set,Number,JSON,Math,String,window:{scrollTo(){}},localStorage:{getItem(){return null},setItem(){}},document:{getElementById:id=>nodes[id]??=(el())},alert(){},confirm:()=>true,setTimeout});
+const html=fs.readFileSync(require('path').resolve(__dirname,'../index.html'),'utf8');vm.runInContext(html.match(/<script>\s*([\s\S]*?)<\/script>/)[1],ctx);
+(async()=>{await vm.runInContext(`(async()=>{
+db.items=[{id:'test',type:'bill',name:'Test',balance:0,payment:30,apr:0,due:1}];cloudHousehold='test';cloudDownload=async()=>{};
+cloud={rpc:async()=>({data:{id:'test',type:'bill',name:'Test',balance:0,payment:30,apr:0,due:1,payment_history:[{month:billingMonth(),date:'2026-11-14',amount:30}],updated_at:'v2'}})};
+await payMinimum('test');
+})()`,ctx);assert.equal(vm.runInContext('db.items[0].balance',ctx),0);assert.match(vm.runInContext('table(db.items)',ctx),/Paid this month/);assert.match(vm.runInContext('table(db.items)',ctx),/2026-11-14 · \$30.00/);await vm.runInContext("payMinimum('test')",ctx);assert.equal(vm.runInContext('db.items[0].balance',ctx),0);await vm.runInContext("db.items[0].paymentHistory=[];cloud.rpc=async()=>({error:{message:'network'}});payMinimum('test')",ctx);assert.equal(vm.runInContext('db.items[0].balance',ctx),0);assert.equal(vm.runInContext('cloudBusy',ctx),false);vm.runInContext("show('home')",ctx);assert.match(nodes.screen.innerHTML,/\$0.00/);console.log('PASS: rendering, deduction, payment history, duplicate guard, failed sync, dashboard totals')})().catch(e=>{console.error(e);process.exit(1)});
